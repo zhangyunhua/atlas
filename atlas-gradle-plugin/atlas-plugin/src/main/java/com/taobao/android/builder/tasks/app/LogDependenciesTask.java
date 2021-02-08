@@ -214,6 +214,8 @@ package com.taobao.android.builder.tasks.app;
  */
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import com.android.build.gradle.api.BaseVariantOutput;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AppVariantOutputContext;
@@ -221,20 +223,31 @@ import com.android.build.gradle.internal.tasks.BaseTask;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.output.DependencyJson;
+import com.taobao.android.builder.extension.TBuildConfig;
 import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tools.FileNameUtils;
 import com.taobao.android.builder.tools.guide.AtlasExtensionOutput;
+
 import org.apache.commons.io.FileUtils;
 import org.gradle.api.GradleException;
+import org.gradle.api.logging.LogLevel;
 import org.gradle.api.tasks.TaskAction;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -247,7 +260,7 @@ public class LogDependenciesTask extends BaseTask {
     private AppVariantContext appVariantContext;
 
     @TaskAction
-    void generate() {
+    void generate() throws IOException {
 
         AtlasDependencyTree atlasDependencyTree = AtlasBuildContext.androidDependencyTrees.get(
             getVariantName());
@@ -260,11 +273,19 @@ public class LogDependenciesTask extends BaseTask {
         File treeFileWithFileSize = new File(
                 getProject().getBuildDir(),
                 "outputs/dependencyTree-fileSize-" + getVariantName() + ".json");
+        File packageForOversizeFile = new File(
+                getProject().getBuildDir(),
+                "outputs/packageForOversize-" + getVariantName() + ".json");
+        File packageForSizeDiffFile = new File(
+                getProject().getBuildDir(),
+                "outputs/packageForSizeRank-" + getVariantName() + ".json");
+
         File dependenciesFile = new File(getProject().getBuildDir(), "outputs/dependencies.txt");
         File versionProperties = new File(getProject().getBuildDir(), "outputs/version.properties");
         File buildInfo = new File(getProject().getBuildDir(), "outputs/build.txt");
         File pluginDependencies =  new File(getProject().getBuildDir(), "outputs/pluginDependencies.txt");
         File atlasConfig = new File(getProject().getBuildDir(), "outputs/atlasConfig.json");
+
 
         appBuildInfo.setDependencyTreeFile(treeFile);
         appBuildInfo.setDependenciesFile(dependenciesFile);
@@ -277,6 +298,158 @@ public class LogDependenciesTask extends BaseTask {
         buildInfo.delete();
 
         treeFile.getParentFile().mkdirs();
+
+        TBuildConfig config = appVariantContext.getAtlasExtension().tBuildConfig;
+        if (config.isPackageDetected()) {
+            File file = config.getPackageDetectedInitFile();
+            if (file != null && file.exists()) {
+                int size;
+                String value;
+                String[] strs;
+                String[] aars;
+                String packageId;
+
+                //计算增量包大小列表
+                Map<String, Integer> incrementMap = new HashMap<>();
+                File incFile = config.getPackageDetectedIncrementFile();
+                if (incFile != null && incFile.exists()) {
+                    String str = inputStream2String(new FileInputStream(incFile));
+                    JSONObject obj = JSONObject.parseObject(str);
+                    Set<Map.Entry<String, Object>> set = obj.entrySet();
+                    Iterator<Map.Entry<String, Object>> beanIt = set.iterator();
+                    Map.Entry<String, Object> entry;
+                    while (beanIt.hasNext()) {
+                        entry = beanIt.next();
+                        try {
+                            size = (Integer) entry.getValue();
+                        } catch (Exception e) {
+                            size = 0;
+                        }
+                        incrementMap.put(entry.getKey(), size);
+                    }
+                }
+
+                //计算初始包大小限制列表
+                Map<String, Integer> thresholdMap = new HashMap<>();
+                String str = inputStream2String(new FileInputStream(file));
+                JSONObject obj = JSON.parseObject(str);
+                JSONArray array = obj.getJSONArray("mainDex");
+                Iterator<Object> it = array.iterator();
+
+                while (it.hasNext()) {
+                    value = (String) it.next();
+                    strs = value.split(" ");
+                    if (strs == null || strs.length != 2) {
+                        continue;
+                    }
+                    try {
+                        size = Integer.parseInt(strs[1]);
+                    } catch (Exception e) {
+                        size = 0;
+                    }
+                    aars = strs[0].split(":");
+                    if (aars != null && aars.length > 2) {
+                        packageId = aars[0] + ":" + aars[1];
+                        thresholdMap.put(packageId, size + config.getPackageIncrementSize() + convertInteger(incrementMap.get(packageId)));
+                    }
+                }
+
+                //计算被编译aar的包大小列表
+                Map<String, Integer> deployMap = new HashMap();
+                DependencyJson dependencyJson = atlasDependencyTree.createDependencyJson(true);
+                List<String> list = dependencyJson.getMainDex();
+                for (String item : list) {
+                    strs = item.split(" ");
+                    if (strs == null || strs.length != 2) {
+                        continue;
+                    }
+                    try {
+                        size = Integer.parseInt(strs[1]);
+                    } catch (Exception e) {
+                        size = Integer.MAX_VALUE;
+                    }
+                    aars = strs[0].split(":");
+                    if (aars != null && aars.length > 2) {
+                        deployMap.put(aars[0] + ":" + aars[1], size);
+                    }
+                }
+
+                //计算超过限定大小的列表
+                Map<String, Integer> computeMap = new HashMap();
+                Set<String> keySet = deployMap.keySet();
+                Iterator<String> packageIt = keySet.iterator();
+                Integer packageSize = 0;
+                Integer thresholdSize = 0;
+                int initSize = 0;
+                StringBuffer sb = new StringBuffer();
+                while (packageIt.hasNext()) {
+                    packageId = packageIt.next();
+                    packageSize = deployMap.get(packageId);
+
+                    thresholdSize = thresholdMap.get(packageId);
+                    if (thresholdSize == null) {
+                        thresholdSize = incrementMap.get(packageId) + config.getPackageIncrementSize();
+                        if (thresholdSize == null) {
+                            thresholdSize = 0;
+                        }
+                        initSize = 0;
+                    } else {
+                        initSize = thresholdSize - config.getPackageIncrementSize() - convertInteger(incrementMap.get(packageId));
+                    }
+
+                    if (packageSize > thresholdSize && thresholdSize >=0 ) {
+                        sb.append(packageId);
+                        sb.append("\tsize: ");
+                        sb.append(packageSize);
+                        sb.append("\toldsize: ");
+                        sb.append(initSize);
+                        sb.append("\toversize: ");
+                        sb.append(packageSize - thresholdSize);
+                        sb.append("\n");
+                    }
+
+                    if (packageSize != initSize) {
+                        computeMap.put(packageId, packageSize - initSize);
+                    }
+                }
+
+                List<Map.Entry<String,Integer>> computeList = new ArrayList<>(computeMap.entrySet());
+                Collections.sort(computeList, new Comparator<Map.Entry<String, Integer>>() {
+                    @Override
+                    public int compare(Map.Entry<String, Integer> o1, Map.Entry<String, Integer> o2) {
+                        return o2.getValue() - o1.getValue();
+                    }
+                });
+
+                StringBuffer rankBuffer = new StringBuffer();
+                for (Map.Entry<String,Integer> mapping: computeList) {
+                    rankBuffer.append(mapping.getKey());
+                    rankBuffer.append("\t");
+                    rankBuffer.append(mapping.getValue());
+                    rankBuffer.append("\n");
+                }
+                if (rankBuffer.length() > 0) {
+                    FileUtils.write(packageForSizeDiffFile, rankBuffer.toString());
+                }
+
+                if (sb.length() > 0) {
+                    if (config.getPackageDetectedDesc() != null) {
+                        sb.append(config.getPackageDetectedDesc());
+                        sb.append("\n");
+                    }
+
+                    FileUtils.write(packageForOversizeFile, sb.toString());
+
+                    getLogger().log(LogLevel.ERROR, "\n");
+                    getLogger().log(LogLevel.ERROR, sb.toString());
+
+                    if (!config.isPackageSizeWarn()) {
+                        throw new GradleException("package size check is fail");
+                    }
+                }
+            }
+        }
+
         try {
 
             DependencyJson dependencyJson = atlasDependencyTree.getDependencyJson();
@@ -362,7 +535,19 @@ public class LogDependenciesTask extends BaseTask {
                 throw new GradleException("Rely on conflict, specific see warning - dependencyConflict. Properties");
             }
         }
+    }
 
+    class PackageSize {
+        private int size;
+        private String packageId;
+        PackageSize(String packageId, int size, int diff) {
+            this.packageId = packageId;
+            this.size = size;
+        }
+
+//        public String toString() {
+//
+//        }
     }
 
     private List<String> getSortVersionList(AtlasDependencyTree atlasDependencyTree) {
@@ -386,6 +571,23 @@ public class LogDependenciesTask extends BaseTask {
         }
 
         return versionList;
+    }
+
+    private static String inputStream2String(InputStream is) throws IOException {
+        BufferedReader in = new BufferedReader(new InputStreamReader(is));
+        StringBuffer buffer = new StringBuffer();
+        String line = "";
+        while ((line = in.readLine()) != null){
+            buffer.append(line);
+        }
+        return buffer.toString();
+    }
+
+    private static int convertInteger(Integer integer) {
+        if (integer == null) {
+            return 0;
+        }
+        return integer;
     }
 
     public static class ConfigAction extends MtlBaseTaskAction<LogDependenciesTask> {

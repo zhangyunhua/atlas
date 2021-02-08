@@ -313,6 +313,73 @@ public class TBuildConfig {
         message = "atlasThe primary dex subcontracting mechanism, the first dex to set up only the startup code corresponding to atlas", order = 3, advance = false, group = "atlas")
     private boolean atlasMultiDex = false;
 
+    private File packageDetectedInitFile;
+
+    private File packageDetectedIncrementFile;
+
+    public File getPackageDetectedInitFile() {
+        return packageDetectedInitFile;
+    }
+
+    public void setPackageDetectedInitFile(File packageDetectedInitFile) {
+        this.packageDetectedInitFile = packageDetectedInitFile;
+    }
+
+    public File getPackageDetectedIncrementFile() {
+        return packageDetectedIncrementFile;
+    }
+
+    public void setPackageDetectedIncrementFile(File packageDetectedIncrementFile) {
+        this.packageDetectedIncrementFile = packageDetectedIncrementFile;
+    }
+
+    private String packageDetectedDesc;
+
+    public String getPackageDetectedDesc() {
+        return packageDetectedDesc;
+    }
+
+    public void setPackageDetectedDesc(String packageDetectedDesc) {
+        this.packageDetectedDesc = packageDetectedDesc;
+    }
+
+    private Boolean packageDetected;
+
+    public Boolean isPackageDetected() {
+        return packageDetected;
+    }
+
+    public void setPackageDetected(Boolean packageDetected) {
+        this.packageDetected = packageDetected;
+    }
+
+    public Boolean getPackageDetected() {
+        return packageDetected;
+    }
+
+    private int packageIncrementSize;
+
+    public int getPackageIncrementSize() {
+        return packageIncrementSize;
+    }
+
+    public void setPackageIncrementSize(int packageIncrementSize) {
+        this.packageIncrementSize = packageIncrementSize;
+    }
+
+    public Boolean getPackageSizeWarn() {
+        return packageSizeWarn;
+    }
+
+    private Boolean packageSizeWarn;
+
+    public Boolean isPackageSizeWarn() {
+        return packageSizeWarn;
+    }
+
+    public void setPackageSizeWarn(Boolean packageSizeWarn) {
+        this.packageSizeWarn = packageSizeWarn;
+    }
 
     public boolean isUpdateSdkVersion() {
         return updateSdkVersion;
@@ -804,8 +871,6 @@ public class TBuildConfig {
     }
 
     private boolean supportAddCallSuper = false;
-
-
 
     public boolean isSupportAddCallSuper() {
         return supportAddCallSuper;
