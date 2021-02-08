@@ -388,9 +388,11 @@ public class LogDependenciesTask extends BaseTask {
 
                     thresholdSize = thresholdMap.get(packageId);
                     if (thresholdSize == null) {
-                        thresholdSize = incrementMap.get(packageId) + config.getPackageIncrementSize();
+                        thresholdSize = incrementMap.get(packageId);
                         if (thresholdSize == null) {
                             thresholdSize = 0;
+                        } else {
+                            thresholdSize += config.getPackageIncrementSize();
                         }
                         initSize = 0;
                     } else {
