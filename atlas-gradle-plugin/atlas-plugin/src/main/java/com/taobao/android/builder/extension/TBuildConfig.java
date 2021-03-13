@@ -333,6 +333,16 @@ public class TBuildConfig {
         this.packageDetectedIncrementFile = packageDetectedIncrementFile;
     }
 
+    private String packageDetectedVariantName;
+
+    public String getPackageDetectedVariantName() {
+        return packageDetectedVariantName;
+    }
+
+    public void setPackageDetectedVariantName(String packageDetectedVariantName) {
+        this.packageDetectedVariantName = packageDetectedVariantName;
+    }
+
     private String packageDetectedDesc;
 
     public String getPackageDetectedDesc() {

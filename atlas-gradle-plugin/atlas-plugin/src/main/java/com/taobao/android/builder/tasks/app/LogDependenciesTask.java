@@ -300,7 +300,8 @@ public class LogDependenciesTask extends BaseTask {
         treeFile.getParentFile().mkdirs();
 
         TBuildConfig config = appVariantContext.getAtlasExtension().tBuildConfig;
-        if (config.isPackageDetected()) {
+        if (config.isPackageDetected()
+                && (config.getPackageDetectedVariantName() == null || config.getPackageDetectedVariantName().equalsIgnoreCase(getVariantName()))) {
             File file = config.getPackageDetectedInitFile();
             if (file != null && file.exists()) {
                 int size;
