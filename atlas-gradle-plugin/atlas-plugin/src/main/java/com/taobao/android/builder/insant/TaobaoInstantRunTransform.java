@@ -221,7 +221,13 @@ public class TaobaoInstantRunTransform extends Transform {
                     }
                     CodeChange codeChange = new CodeChange();
                     String path = FileUtils.relativePath(file, inputDir);
+
+                    if (!path.endsWith(SdkConstants.DOT_CLASS)) { //modify zyh
+                        continue;
+                    }
+
                     String className = path.replace("/", ".").substring(0, path.length() - 6);
+
                     if (isMainRClass(className)) {
                         mainRFiles.add(file);
                     }

@@ -317,6 +317,8 @@ public class TBuildConfig {
 
     private File packageDetectedIncrementFile;
 
+    private String packageDetectedIncrementUrl;
+
     public File getPackageDetectedInitFile() {
         return packageDetectedInitFile;
     }
@@ -331,6 +333,14 @@ public class TBuildConfig {
 
     public void setPackageDetectedIncrementFile(File packageDetectedIncrementFile) {
         this.packageDetectedIncrementFile = packageDetectedIncrementFile;
+    }
+
+    public String getPackageDetectedIncrementUrl() {
+        return packageDetectedIncrementUrl;
+    }
+
+    public void setPackageDetectedIncrementUrl(String packageDetectedIncrementUrl) {
+        this.packageDetectedIncrementUrl = packageDetectedIncrementUrl;
     }
 
     private String packageDetectedVariantName;
