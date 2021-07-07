@@ -229,6 +229,12 @@ import com.taobao.android.builder.tools.FileNameUtils;
 import com.taobao.android.builder.tools.guide.AtlasExtensionOutput;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.apache.http.util.TextUtils;
 import org.gradle.api.GradleException;
 import org.gradle.api.logging.LogLevel;
 import org.gradle.api.tasks.TaskAction;
@@ -315,18 +321,41 @@ public class LogDependenciesTask extends BaseTask {
                 File incFile = config.getPackageDetectedIncrementFile();
                 if (incFile != null && incFile.exists()) {
                     String str = inputStream2String(new FileInputStream(incFile));
-                    JSONObject obj = JSONObject.parseObject(str);
-                    Set<Map.Entry<String, Object>> set = obj.entrySet();
-                    Iterator<Map.Entry<String, Object>> beanIt = set.iterator();
-                    Map.Entry<String, Object> entry;
-                    while (beanIt.hasNext()) {
-                        entry = beanIt.next();
-                        try {
-                            size = (Integer) entry.getValue();
-                        } catch (Exception e) {
-                            size = 0;
+                    updateIncrementMap(str, incrementMap);
+//                    JSONObject obj = JSONObject.parseObject(str);
+//                    Set<Map.Entry<String, Object>> set = obj.entrySet();
+//                    Iterator<Map.Entry<String, Object>> beanIt = set.iterator();
+//                    Map.Entry<String, Object> entry;
+//                    while (beanIt.hasNext()) {
+//                        entry = beanIt.next();
+//                        try {
+//                            size = (Integer) entry.getValue();
+//                        } catch (Exception e) {
+//                            size = 0;
+//                        }
+//                        incrementMap.put(entry.getKey(), size);
+//                    }
+                }
+
+                String url = config.getPackageDetectedIncrementUrl();
+                if (!TextUtils.isEmpty(url)) {
+                    CloseableHttpResponse response = null;
+                    CloseableHttpClient httpClient = null;
+                    try {
+                        httpClient = HttpClients.createDefault();
+                        HttpGet httpGet = new HttpGet(url);
+                        response = httpClient.execute(httpGet);
+                        String content = EntityUtils.toString(response.getEntity(), "UTF-8");
+                        if (!TextUtils.isEmpty(content)) {
+                            updateIncrementMap(content, incrementMap);
                         }
-                        incrementMap.put(entry.getKey(), size);
+                    } finally {
+                        if (response != null) {
+                            response.close();
+                        }
+                        if (httpClient != null) {
+                            httpClient.close();
+                        }
                     }
                 }
 
@@ -591,6 +620,23 @@ public class LogDependenciesTask extends BaseTask {
             return 0;
         }
         return integer;
+    }
+
+    private static void updateIncrementMap(String content, Map<String, Integer>  incrementMap) {
+        int size;
+        JSONObject obj = JSONObject.parseObject(content);
+        Set<Map.Entry<String, Object>> set = obj.entrySet();
+        Iterator<Map.Entry<String, Object>> beanIt = set.iterator();
+        Map.Entry<String, Object> entry;
+        while (beanIt.hasNext()) {
+            entry = beanIt.next();
+            try {
+                size = (Integer) entry.getValue();
+            } catch (Exception e) {
+                size = 0;
+            }
+            incrementMap.put(entry.getKey(), size);
+        }
     }
 
     public static class ConfigAction extends MtlBaseTaskAction<LogDependenciesTask> {

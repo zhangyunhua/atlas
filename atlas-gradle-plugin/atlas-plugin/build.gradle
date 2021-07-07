@@ -232,7 +232,7 @@ tasks.findByName("test").enabled = false
 dependencies {
     compile localGroovy()
     compile gradleApi()
-
+    compile "org.apache.httpcomponents:httpclient:4.5.9"
     compile "com.taobao.android:dex_patch:3.0.0-rc16"
     compile "com.android.tools.build:gradle:3.0.1"
     compile "org.apache.commons:commons-lang3:3.4"
